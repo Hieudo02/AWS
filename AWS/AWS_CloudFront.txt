@@ -1,0 +1,33 @@
+______________Tạo Distribution S3 Bucket Origin:______________
+1. Tạo S3 Bucket (đã có sẵn)
+2. Tạo CloudFront:
++ Origin domain: Chọn S3 Bucket đã tạo ở trên
++ Tại mục "Origin Access", để dùng OAI ta chọn "Legacy access identities" -> Chọn "Create new OAI" -> Tick "Yes, update the bucket policy"
++ Tại mục "Default root object", nếu muốn khi client request 1 cái root URL (thay vì chỉ thẳng đến 1 cái j đó cụ thể) và ta muốn phản hồi về cái j đó thì nên gán nó vào đây
+VD: trong S3 Bucket có 1 file "index.html" với nội dung khi mở lên là chữ "Hello", và tôi muốn khi có 1 root URL request thì nó sẽ mở file đó lên, nên tôi ghi file đó vào ô
++ Sau khi nhấn "Create distribution", nó sẽ mất 1 khoảng thời gian để Distribute data trong S3 Bucket (với vùng ta chọn trong bài là Singapore) 
+tới các Edge Location (nôm na là các vùng khác, để khi có request, nó sẽ tới Edge của vùng tương ứng để phản hồi, từ đó tốc độ sẽ nhanh hơn rất nhiều)
+
+3. Chặn truy cập theo quốc gia:
++ tại Distribution tương ứng, chọn mục "Geographic restrictions"
++ Bấm edit sẽ có 3 options:
+	+ Nếu muốn Allow nước cụ thể và Block hết phần còn lại, chọn "Allow list" -> Chọn tên (những) nước muốn allow
+	+ Nếu muốn Block nước cụ thể và Allow hết phần còn lại, chọn "Block list" -> Chọn tên (những) nước muốn block 
+
+(LƯU Ý: VỚI MỖI LẦN HIỆU CHỈNH BẤT KÌ, NÓ SẼ TỐN 1 KHOẢNG THỜI GIAN ĐỂ DEPLOYING)
+
+4. TTL (Time To Live) & Invalidation:
++ Mỗi 1 cái lưu trữ của origin (trong trường hợp ta làm về S3 Bucket) sẽ được đẩy lên các Edge Location của CloudFront, thì các thông tin lưu trữ đó (ở các Edge) sẽ tồn tại trong 1 khoảng thời gian (được gọi là Time To Live - TTL)
++ Để xem cấu hình TTL, vào "Distributions" -> "E..." -> "Behaviors" -> Click vào 1 mục -> "Edit" -> Cuộn xuống dưới, đến phần "Cache key and origin requests" -> Tại mục "CachingOptimized" chọn "View policy"
++ Sau đó nó hiện ra "Managed-CachingOptimized", tại đây ta sẽ thấy mục "TTL settings" với thông số: 
+	Minimum TTL (seconds): 1
+	Maximum TTL (seconds): 31536000 (= 365 ngày)
+	Default TTL (seconds): 86400 (= 1 ngày)
+Thông số này có ý nghĩa là khi dữ liệu từ S3 đẩy lên CloudFront thì các dữ liệu đó sẽ được caching (lưu giữ lại) tại đó 1 ngày (default), sau 1 ngày đó nó sẽ đc Refresh (cập nhật lại) theo bên origin (S3) 
+Hệ quả gây ra ở đây là khi mà ta đã upload 1 file (A) và tiếp theo ta lại muốn upload 1 file mới (B) thì bên CloudFront sẽ không cập nhật file mới (B) đó mà vẫn sẽ là file cũ (A)
+=> Ta nên hiệu chỉnh lại TTL bằng tính năng được CloudFront hỗ trợ là Invalidation => Tính năng này thực hiện boosting tất cả các Edge Location về việc cập nhật dữ liệu mới
+	+ Quay lại mục "Distributions" -> Chọn mục muốn hiệu chỉnh TTL -> Chọn "Invalidations"
+	+ Chọn "Create invalidation" -> Tại "Add object paths", nếu chỉ có 1 file trong S3 thì dùng "/*", nếu có nhiều file và muốn chọn cụ thể thì dẫn path vào (Add item)... -> "Create invalidation"
+	+ Sau đó tại "Status", nó sẽ "In progress" (vì đang update cho toàn bộ Edge Location)
+=> Sau setting, nó sẽ force tất cả các Edge cập nhật lại file thì vì phải chờ TTL (Thời gian cập nhật lâu hay chậm tuỳ thuộc vào số lượng Edge Location)
+(NOTE: The first 1,000 invalidation paths that you submit per month are free. Thereafter, you will be charged $0.005 per path requested for invalidation)

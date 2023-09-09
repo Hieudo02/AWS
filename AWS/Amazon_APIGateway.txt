@@ -1,0 +1,203 @@
+- REST API: is an application program interface that used HTTP request to GET, PUT, POST, DELETE data. So ideally in REST API it receives and response to requests.
+
+- WebSocket API: support two way communication between client application and your backend, so the backend can send callback messages to connected clients.
+
+- When we use REST API, when we use Websocket API ?
+	+ REST API: when we want to expose and manipulate the backend data to be used by any web application or mobile application to GET, PUT, POST and DELETE data.
+	
+	+ Websocket API: often use in real-time application such as chat-bot application, collaboration platform, multi-player games.
+		
+- Endpoint Type: 3 types
+	+ Regional: Deloy in the current region
+	+ Edge optimized: Deloy to to the CloudFront network
+	+ Private: accessible only from VPCs
+
++ Create API Gateway:
+	+) Navigate "API Gateway" -> Click on "Create API"
+	+) Choose protocol: click on "REST" (in this tutorial, we use REST)
+	+) Create new API: click on "New API" -> then it appears "Settings"
+	+) At "Settings": (Just example)
+		++) API name: myfirstAPIGateway
+		++) Description: My first API Gateway
+		++) Endpoint Type: Regional (In my case, it's Singapore)
+	+) Then click on "Create API"
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+- Resources and Methods with Lambda integration:
++ Create IAM Role: (IAM Management Console) (Giả sử Amazon Lambda mà muốn gửi log vào trong cloudwatch thì ta cần phải có IAM role)
+	+) Click on "Roles" from the left panel -> Click on "Create role" -> Select "Lambda" (Because we are creating this role for the lambda function) -> Click on "Next: Permissions"
+	+) At "Attach permissions policies", We have to choose "the access to cloud watch logs" -> "AWSLambdaExecute" -> Choose it and click on "Next: Tags"
+	+) "Tags" is optional (you can choose: Key -> Name, Value -> My First API Gateway)
+	+) At "Review", write a role name (that you will choose when create function) -> ex: Role name: myfirst-api-gateway-role -> Click on "Create role"
+
++ After create IAM Role, create Lambda Function: (Lambda Management Console) 
+(The reason why we create Lambda Function is because we are going to bind(trói buộc, ràng buộc) this lambda function with the API Gateway)
+	+) Choose "Functions" in the left panel -> Click on "Create function"
+	+) Type "Function name", "Runtime" (ex: myfirstAPIGateway - Python 3.10)
+	+) Then, Choose execution role that existed (which we created above) -> Click on "Use an existing role" -> Select the role -> Create function
+
++ After create Lambda function, create Resources:
+	+) Go back to API Gateway, click on the API that you created before (in my case, it's "myfirstAPIGateway")
+	+) Click on "Resources" in the left panel -> Click on "Actions" -> "Create Resource"
+	+) Type name, for example "myfirst-rsc" -> Click on "Create Resource"
+
++ Create Methods:
+	+) Click on Resources -> Then click on the tab "Actions" -> "Create Method" 
+	+) "Integration type": Lambda Function (Cause we are going to bind the API Gateway with a given lambda function)
+	+) "Lambda Region": (your region)
+	+) "Lambda function": (choose the function that we created above -> "myfirstAPIGateway")
+	+) Click on "Save" 
+		-> Here will appear a permission notification:
+			++) Click OK -> Gateway will get the permission to invoke(gọi 1 phương thức hoặc 1 hàm) this lambda function when anyone or any client hit the URL.   
+_________________________________________________________________________________________________
+- Resources: is sth like this:	www.example.com/myfirst-stage/myfirst-rsc			|
+with: 												|
+	+ "myfirst-stage" is deployment stage							|
+	+ "myfirst-rsc" is the thing we create in "Resources" (it's the name that we create)	|
+- Methods:											|
+	+ GET											|
+	+ PUT											|
+	+ POST											|
+	+ DELETE...										|
+_________________________________________________________________________________________________
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+- Validate request header:
+	+ Go on to "Resources" and choose POST -> Integration Request -> Mapping Templates -> Choose "Never" and "Add mapping template"
+	+ At Content-Type, add the header that you want Postman to send to API, for example: "application/json"
+	+ Finally, click on tick "v" and save button
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+- Validate request body:
+	+ Code in function:
+_________________________________________________________________________________________
+import json										|
+											|
+def lambda_handler(event, context):							|
+    # TODO implement									|
+    print(event) # print the payload that we are sending from the Postman software	|
+    											|
+    response = {									|	
+        "Hieu": [									|			
+            {										|				
+                "ID": 20146157,								|
+                "AGE": 21								|
+            }    									|
+        ],										|
+        										|
+        "Dat": [									|
+            {										|
+                "ID": 20146151,								|
+                "AGE": 22								|
+            }										|
+        ]										|
+    }											|
+    											|
+    return {										|
+        'statusCode': 200,								|
+        # 'body': json.dumps('API invoked!')						|
+        'body': response[event["Name"]] # event "Name" is what Postman sends		|
+    }											|
+_________________________________________________________________________________________
+	+ Define the "Models":
+		+) Model schema: 
+			{
+  				"$schema": "https://json-schema.org/draft/2020-12/schema",
+  				"title": "Name of Students",
+  				"type": "object",
+				"properties": {
+					"Name": {"type": "string", "enum": ["Hieu", "Dat"]}
+				},
+				"required": ["Name"]
+			}
+
+		-> Schema Keyword: $schema (and $id).
+		-> Schema Annotations: title (and description).
+		-> Validation Keyword: type. (Can be: array, string,...)
+		-> "properties" is modifidable	
+	+ After create Model, choose it in the settings (in method execution at Resources) -> Request Validator: "Validate body" -> Click on Request Body and add your model
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+- Upload binary file to S3 bucket using API gateway, lambda function: (And how to decode the binary data with the code snippet within the lambda function)
+******
+*Idea*: Upload the file using API Gateway and upload it into S3 Bucket.
+******
++ Create new lambda function (Lambda Management Console):
+	+) Name: uploadAPI
+	+) Custom runtime: python 3.10 (or lower)
+	+) Execution role: (use IAM role which is created before) myfirst-api-gateway-role
+	+) Then click on "Create function"
+
++ Create S3 Bucket (S3 Management Console): (Where we will store the file that we are uploading (binary file,...))
+(Because we are going to decode that binary data within the lambda function so we are also going to write some code within the lambda function)
+	+) Click on "Create bucket" -> Give it a name (myfirst-upload-api) -> Click "Create"
+
++ After that, jump back to lambda function to write some codes:
+***************************************************************************************************************************************************************************
+* We are going to decode the binary data that we will receive from API Gateway, so basically API gateway will send base64 encoded binary content to this lambda function. *
+* Hence we have to decode it first and then we can upload it to the S3 Bucket.  											  *
+* For decoding, we will import one more library saying: "base64" (look like this: import base64)									  *
+* Code:
+________________________________________________________________________________________________________
+import json 											
+import base64												
+import boto3												
+
+def lambda_handler(event, context):
+    s3 = boto3.client("s3")
+
+    get_file_content = event["content"]
+    decode_content = base64.b64decode(get_file_content)
+
+    s3_upload = s3.put_object(Bucket="myfirst-upload-api", Key="content.pdf", Body=decode_content)
+
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Hello from Lambda!')
+    }
+________________________________________________________________________________________________________
+
++ Jumps back to API Gateway, and create new Resources -> Name: upload -> Then create new Methods (POST) with lambda func that we created above (uploadAPI)
++ Next click on "Integration Request" -> "Mapping Templates" -> Select the second option and Add mapping template: application/pdf -> Scroll down in the generate template, type this code:
+_________________________________
+{
+	"content": "$input.body"
+}
+_________________________________
+***
+=> This key value pair will work as the transformation template, so here we are asking the API gateway to apply this transformation template on the request body that is receiving from the end client, 
+and POST applying this transformation, it will forward the request body in the form of key value pair that is "content: binary_data" and if you remember that within the lambda function, 
+we have define event of content to access the binary data and that event of content is accessible only after applying this transformation template upon the request body that it is receiving from end client.
+***
+
++ Then go to "Settings" in the left Panel, scroll down to "Binary Media Types" and Add new: application/pdf -> Save Changes => we are saying API gateway to treat "application/pdf" as the binary media type  
++ Go back to "Resources" and Deploy API
+
+***Testing (Postman)***
++ Copy Invoke URL, Open Postman, Create new tab
++ Choose POST request and paste the URL link, at the end uf URL, define the resource name (in my case, it's upload):
+	https://.../<stage_name>/upload
++ Then define "Headers": 
+	Key : Content-Type
+	Value: application/pdf
++ At "Body", select binary, and upload file (If eveything is OK, it'll return 200 and the file will exist in the S3 Bucket)
+
+(Note: file types can be .PNG, .CSV, .TXT, etc...)
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
